@@ -71,18 +71,28 @@ const colors = {
   bgCyan: '\x1b[46m',
 };
 
-// ASCII Art banner for AIC²
+// Get terminal width (with fallback)
+function getTerminalWidth(): number {
+  return process.stdout.columns || 80;
+}
+
+// Create a full-width horizontal line
+function fullWidthLine(char: string = '═', color: string = colors.dim): string {
+  const width = getTerminalWidth();
+  return `${color}${char.repeat(width)}${colors.reset}`;
+}
+
+// ASCII Art banner for AIC² (larger version)
 const AIC_BANNER = `
-${colors.brightCyan}     █████╗ ${colors.brightMagenta}██╗${colors.brightYellow} ██████╗ ${colors.dim}^2${colors.reset}
-${colors.brightCyan}    ██╔══██╗${colors.brightMagenta}██║${colors.brightYellow}██╔════╝
-${colors.brightCyan}    ███████║${colors.brightMagenta}██║${colors.brightYellow}██║     
-${colors.brightCyan}    ██╔══██║${colors.brightMagenta}██║${colors.brightYellow}██║     
-${colors.brightCyan}    ██║  ██║${colors.brightMagenta}██║${colors.brightYellow}╚██████╗
-${colors.brightCyan}    ╚═╝  ╚═╝${colors.brightMagenta}╚═╝${colors.brightYellow} ╚═════╝${colors.reset}
+${colors.brightCyan}     ██████╗  ${colors.brightMagenta}██╗${colors.brightYellow} ██████╗${colors.reset}  ${colors.dim}²${colors.reset}
+${colors.brightCyan}    ██╔══██╗ ${colors.brightMagenta}██║${colors.brightYellow}██╔════╝${colors.reset}
+${colors.brightCyan}    ███████║ ${colors.brightMagenta}██║${colors.brightYellow}██║     ${colors.reset}
+${colors.brightCyan}    ██╔══██║ ${colors.brightMagenta}██║${colors.brightYellow}██║     ${colors.reset}
+${colors.brightCyan}    ██║  ██║ ${colors.brightMagenta}██║${colors.brightYellow}╚██████╗${colors.reset}
+${colors.brightCyan}    ╚═╝  ╚═╝ ${colors.brightMagenta}╚═╝${colors.brightYellow} ╚═════╝${colors.reset}
 `;
 
 const VERSION = 'v1.0.0';
-const TAGLINE = `${colors.dim}─────${colors.reset} ${colors.brightCyan}A${colors.brightMagenta}I${colors.reset} ${colors.brightYellow}C${colors.white}ode${colors.reset} ${colors.brightYellow}C${colors.white}onnect${colors.reset} ${colors.dim}${VERSION} ─────${colors.reset}`;
 
 // Tool configuration - add new tools here
 interface ToolConfig {
@@ -206,40 +216,85 @@ export class SDKSession {
     // Ensure cursor is visible
     process.stdout.write(cursor.show + cursor.blockBlink);
     
+    const width = getTerminalWidth();
+    
     // Clear screen and show splash
     console.clear();
-    console.log(AIC_BANNER);
-    console.log(TAGLINE);
+    
+    // Top separator
+    console.log('');
+    console.log(fullWidthLine('═'));
     console.log('');
     
-    // Show working directory
-    console.log(`${colors.dim}📁 ${this.cwd}${colors.reset}`);
-    console.log('');
-    
-    // Commands box
-    const commands = [
-      `${colorize('//claude', colors.brightCyan)}          Switch to Claude Code`,
-      `${colorize('//gemini', colors.brightMagenta)}          Switch to Gemini CLI`,
-      `${colorize('//i', colors.brightYellow)}               Enter interactive mode`,
-      `${colorize('//forward', colors.brightGreen)} ${colors.dim}[tool] [msg]${colors.reset} Forward response`,
-      `${colorize('//history', colors.blue)}         Show conversation`,
-      `${colorize('//status', colors.gray)}          Show running processes`,
-      `${colorize('//clear', colors.red)}           Clear sessions`,
-      `${colorize('//quit', colors.dim)}            Exit ${colors.dim}(or //cya)${colors.reset}`,
+    // Banner with title on the right side
+    const bannerLines = AIC_BANNER.trim().split('\n');
+    const titleLines = [
+      '',
+      `${colors.brightCyan}A${colors.brightMagenta}I${colors.reset} ${colors.brightYellow}C${colors.white}ode${colors.reset} ${colors.brightYellow}C${colors.white}onnect${colors.reset}`,
+      `${colors.dim}${VERSION}${colors.reset}`,
+      '',
+      `${colors.dim}📁 ${this.cwd}${colors.reset}`,
+      '',
     ];
-    console.log(drawBox(commands, 52));
+    
+    // Print banner and title side by side
+    const maxLines = Math.max(bannerLines.length, titleLines.length);
+    for (let i = 0; i < maxLines; i++) {
+      const bannerLine = bannerLines[i] || '';
+      const titleLine = titleLines[i] || '';
+      const bannerWidth = 30; // Approximate width of banner
+      const gap = 10;
+      console.log(`  ${bannerLine}${' '.repeat(Math.max(0, bannerWidth - stripAnsiLength(bannerLine) + gap))}${titleLine}`);
+    }
+    
+    console.log('');
+    console.log(fullWidthLine('─'));
     console.log('');
     
-    // Tips
-    console.log(`${colors.dim}💡 Press ${colors.brightYellow}Tab${colors.dim} to autocomplete commands${colors.reset}`);
-    console.log(`${colors.dim}💡 Press ${colors.brightYellow}↑/↓${colors.dim} to cycle through command history${colors.reset}`);
-    console.log(`${colors.dim}💡 Press ${colors.brightYellow}Ctrl+]${colors.dim} to detach from interactive mode${colors.reset}`);
+    // Commands in a wider layout
+    const commandsLeft = [
+      `  ${colorize('//claude', colors.brightCyan)}       Switch to Claude Code`,
+      `  ${colorize('//gemini', colors.brightMagenta)}       Switch to Gemini CLI`,
+      `  ${colorize('//i', colors.brightYellow)}            Enter interactive mode`,
+      `  ${colorize('//forward', colors.brightGreen)}      Forward response ${colors.dim}[tool] [msg]${colors.reset}`,
+    ];
+    
+    const commandsRight = [
+      `  ${colorize('//history', colors.blue)}      Show conversation`,
+      `  ${colorize('//status', colors.gray)}       Show running processes`,
+      `  ${colorize('//clear', colors.red)}        Clear sessions`,
+      `  ${colorize('//quit', colors.dim)}         Exit ${colors.dim}(or //cya)${colors.reset}`,
+    ];
+    
+    // Print commands side by side if terminal is wide enough
+    if (width >= 100) {
+      const colWidth = Math.floor(width / 2) - 5;
+      for (let i = 0; i < commandsLeft.length; i++) {
+        const left = commandsLeft[i] || '';
+        const right = commandsRight[i] || '';
+        const leftPadded = left + ' '.repeat(Math.max(0, colWidth - stripAnsiLength(left)));
+        console.log(`${leftPadded}${right}`);
+      }
+    } else {
+      // Single column for narrow terminals
+      commandsLeft.forEach(cmd => console.log(cmd));
+      commandsRight.forEach(cmd => console.log(cmd));
+    }
+    
+    console.log('');
+    console.log(fullWidthLine('─'));
     console.log('');
     
-    // Show active tool
+    // Tips in a row
+    console.log(`  ${colors.dim}💡 ${colors.brightYellow}Tab${colors.dim}: autocomplete   ${colors.brightYellow}↑/↓${colors.dim}: history   ${colors.brightYellow}Ctrl+]${colors.dim}: detach interactive${colors.reset}`);
+    console.log('');
+    
+    // Show active tool with full width separator
     const toolColor = this.activeTool === 'claude' ? colors.brightCyan : colors.brightMagenta;
     const toolName = this.activeTool === 'claude' ? 'Claude Code' : 'Gemini CLI';
-    console.log(`${colors.green}●${colors.reset} Active: ${toolColor}${toolName}${colors.reset}`);
+    console.log(fullWidthLine('═'));
+    console.log(`  ${colors.green}●${colors.reset} Active: ${toolColor}${toolName}${colors.reset}`);
+    console.log(fullWidthLine('─'));
     console.log('');
 
     this.isRunning = true;
