@@ -1,10 +1,26 @@
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, ChildProcess, execSync } from 'child_process';
 import { createInterface, Interface, CompleterResult } from 'readline';
 import * as pty from 'node-pty';
 import { IPty } from 'node-pty';
 import { marked } from 'marked';
 import TerminalRenderer from 'marked-terminal';
 import { stripAnsi } from './utils.js';
+
+/**
+ * Get the version of a CLI tool
+ */
+function getToolVersion(command: string): string | null {
+  try {
+    const output = execSync(`${command} -v 2>/dev/null`, { encoding: 'utf-8' }).trim();
+    // Extract version number (first line, clean up)
+    const firstLine = output.split('\n')[0];
+    // Handle formats like "2.0.59 (Claude Code)" or just "0.19.1"
+    const version = firstLine.split(' ')[0];
+    return version || null;
+  } catch {
+    return null;
+  }
+}
 
 // Configure marked to render markdown for terminal with colors
 marked.setOptions({
@@ -226,15 +242,24 @@ export class SDKSession {
     console.log(fullWidthLine('═'));
     console.log('');
     
-    // Banner with title on the right side
+    // Get tool versions
+    const claudeVersion = getToolVersion('claude');
+    const geminiVersion = getToolVersion('gemini');
+    
+    // Banner with title and connected tools on the right side
     const bannerLines = AIC_BANNER.trim().split('\n');
     const titleLines = [
+      `${colors.brightCyan}A${colors.brightMagenta}I${colors.reset} ${colors.brightYellow}C${colors.white}ode${colors.reset} ${colors.brightYellow}C${colors.white}onnect${colors.reset}  ${colors.dim}${VERSION}${colors.reset}`,
       '',
-      `${colors.brightCyan}A${colors.brightMagenta}I${colors.reset} ${colors.brightYellow}C${colors.white}ode${colors.reset} ${colors.brightYellow}C${colors.white}onnect${colors.reset}`,
-      `${colors.dim}${VERSION}${colors.reset}`,
+      `${colors.dim}Connected Tools:${colors.reset}`,
+      claudeVersion 
+        ? `${colors.green}✓${colors.reset} ${colors.brightCyan}Claude Code${colors.reset} ${colors.dim}v${claudeVersion}${colors.reset}`
+        : `${colors.red}✗${colors.reset} ${colors.dim}Claude Code (not found)${colors.reset}`,
+      geminiVersion
+        ? `${colors.green}✓${colors.reset} ${colors.brightMagenta}Gemini CLI${colors.reset} ${colors.dim}v${geminiVersion}${colors.reset}`
+        : `${colors.red}✗${colors.reset} ${colors.dim}Gemini CLI (not found)${colors.reset}`,
       '',
       `${colors.dim}📁 ${this.cwd}${colors.reset}`,
-      '',
     ];
     
     // Print banner and title side by side
