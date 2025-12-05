@@ -35,13 +35,18 @@ This is tedious and breaks your flow.
 ## Installation
 
 ```bash
-# Clone and install
+npm install -g ai-code-connect
+```
+
+That's it! The `aic` command is now available globally.
+
+### Alternative: Install from Source
+
+```bash
 git clone https://github.com/jacob-bd/ai-code-connect.git
 cd ai-code-connect
 npm install
 npm run build
-
-# Link globally
 npm link
 ```
 
