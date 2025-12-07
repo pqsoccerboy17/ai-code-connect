@@ -121,46 +121,56 @@ registry.register(new CodexAdapter());  // Add this line
 
 ### Step 3: Add to SDK Session
 
-Edit `src/sdk-session.ts`:
+Edit `src/sdk-session.ts`. There are several places to update:
 
-1. **Add to AVAILABLE_TOOLS array** (near the top of the file):
+**Quick summary of changes needed:**
+- Add to `AVAILABLE_TOOLS` array
+- Add to `activeTool` type union
+- Add session tracking flag
+- Add to `sendToTool()` if/else
+- Create `sendToCodex()` method (copy from `sendToClaude`)
+- Add to command menu
+- Add to `handleMetaCommand` switch
+
+**Tip for AI-assisted development:** If you're using Claude Code or similar, just say:
+> "Add a new tool called 'codex' for OpenAI Codex CLI. Follow the pattern used for claude and gemini in sdk-session.ts"
+
+The AI will find all the relevant locations and make the changes.
+
+**Manual steps if needed:**
+
+1. **Add to AVAILABLE_TOOLS array** (search for `AVAILABLE_TOOLS`):
 ```typescript
-const AVAILABLE_TOOLS: ToolConfig[] = [
-  { name: 'claude', displayName: 'Claude Code', color: colors.brightCyan },
-  { name: 'gemini', displayName: 'Gemini CLI', color: colors.brightMagenta },
-  { name: 'codex', displayName: 'OpenAI Codex', color: colors.brightGreen },  // Add this
-];
+{ name: 'codex', displayName: 'OpenAI Codex', color: colors.brightGreen },
 ```
 
-2. **Add the tool type** to activeTool:
-```typescript
-private activeTool: 'claude' | 'gemini' | 'codex' = 'claude';
-```
-
-3. **Add session tracking**:
+2. **Add session flag** (search for `claudeHasSession`):
 ```typescript
 private codexHasSession = false;
 ```
 
-4. **Add to `sendToTool()`**:
+3. **Add send method** - Copy `sendToClaude()` and modify:
+   - Change spinner text
+   - Change CLI command and flags for Codex
+   - Update session flag name
+
+4. **Add to sendToTool()** (search for `sendToTool`):
 ```typescript
-if (this.activeTool === 'codex') {
+} else if (this.activeTool === 'codex') {
   response = await this.sendToCodex(message);
 }
 ```
 
-5. Add the send method (copy from sendToClaude/sendToGemini as template)
-
-6. **Add to command menu** (AIC_COMMANDS array):
+5. **Add to command menu** (search for `AIC_COMMANDS`):
 ```typescript
 { value: '/codex', name: '/codex         Switch to Codex', description: 'Switch to OpenAI Codex' },
 ```
 
-7. **Add to handleMetaCommand switch**:
+6. **Add to handleMetaCommand** (search for `case 'gemini'`):
 ```typescript
 case 'codex':
   this.activeTool = 'codex';
-  console.log(`Switched to OpenAI Codex`);
+  console.log(`● Switched to ${colors.brightGreen}OpenAI Codex${colors.reset}`);
   break;
 ```
 
