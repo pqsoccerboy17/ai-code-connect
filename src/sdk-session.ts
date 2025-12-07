@@ -825,6 +825,80 @@ export class SDKSession {
     console.log('');
   }
 
+  /**
+   * Send a message silently (no response display).
+   * Used for /fwdi to send via print mode without showing output,
+   * then user sees response in interactive mode.
+   */
+  private async sendToToolSilent(message: string, statusMessage: string): Promise<boolean> {
+    if (this.requestInProgress) {
+      console.log(`${colors.yellow}⏳ Please wait for the current request to finish${colors.reset}`);
+      return false;
+    }
+
+    this.requestInProgress = true;
+
+    // Record user message
+    this.conversationHistory.push({
+      tool: this.activeTool,
+      role: 'user',
+      content: message,
+    });
+
+    while (this.conversationHistory.length > MAX_HISTORY_SIZE) {
+      this.conversationHistory.shift();
+    }
+
+    const adapter = this.registry.get(this.activeTool);
+    const toolColor = adapter?.color || colors.white;
+
+    // Custom spinner with status message
+    const spinner = new Spinner(`${toolColor}${statusMessage}${colors.reset}`);
+    spinner.start();
+
+    try {
+      // Kill any existing PTY for this tool
+      const existingManager = this.ptyManagers.get(this.activeTool);
+      if (existingManager && !existingManager.isDead()) {
+        existingManager.kill(true);
+        this.ptyManagers.delete(this.activeTool);
+      }
+
+      if (!adapter) {
+        throw new Error(`Unknown tool: ${this.activeTool}`);
+      }
+
+      const response = await adapter.send(message, {
+        cwd: this.cwd,
+        continueSession: true,
+        timeout: REQUEST_TIMEOUT_MS,
+      });
+
+      spinner.stop();
+
+      // Record assistant response (but don't display it)
+      this.conversationHistory.push({
+        tool: this.activeTool,
+        role: 'assistant',
+        content: response,
+      });
+
+      while (this.conversationHistory.length > MAX_HISTORY_SIZE) {
+        this.conversationHistory.shift();
+      }
+
+      return true;
+    } catch (error) {
+      spinner.stop();
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`\n${colors.red}Error:${colors.reset} ${errorMessage}\n`);
+      this.conversationHistory.pop();
+      return false;
+    } finally {
+      this.requestInProgress = false;
+    }
+  }
+
   private async sendToTool(message: string): Promise<void> {
     // Prevent concurrent requests
     if (this.requestInProgress) {
@@ -1277,14 +1351,20 @@ export class SDKSession {
       forwardPrompt += `\n\nAdditional context: ${additionalMessage.trim()}`;
     }
 
-    // Always send via non-interactive mode first (reliable, clean capture)
-    console.log(`${targetColor}${targetDisplayName} responds:${colors.reset}`);
-    await this.sendToTool(forwardPrompt);
-
-    // If interactive mode requested, enter it AFTER the response for continued conversation
     if (interactive) {
-      console.log(`\n${colors.dim}Entering interactive mode to continue the conversation...${colors.reset}`);
-      await this.enterInteractiveMode();
+      // Silent send: show status spinner, don't display response
+      // User will see the response when interactive mode opens
+      const statusMessage = `Sending to ${targetDisplayName}... Interactive mode will launch shortly`;
+      const success = await this.sendToToolSilent(forwardPrompt, statusMessage);
+
+      if (success) {
+        console.log(`\n${colors.dim}Launching interactive mode...${colors.reset}`);
+        await this.enterInteractiveMode();
+      }
+    } else {
+      // Regular /fwd: show spinner and display response
+      console.log(`${targetColor}${targetDisplayName} responds:${colors.reset}`);
+      await this.sendToTool(forwardPrompt);
     }
   }
 

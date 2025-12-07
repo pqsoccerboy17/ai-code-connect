@@ -78,7 +78,9 @@ That's it! This launches the interactive session.
 | Command | Description |
 |---------|-------------|
 | `/claude` | Switch to Claude Code |
+| `/claude -i` | Switch to Claude Code and enter interactive mode |
 | `/gemini` | Switch to Gemini CLI |
+| `/gemini -i` | Switch to Gemini CLI and enter interactive mode |
 | `/i` | Enter interactive mode (full tool access) |
 | `/forward` | Forward last response to other tool (auto-selects if 2 tools) |
 | `/forward [tool]` | Forward to specific tool (required if 3+ tools) |
