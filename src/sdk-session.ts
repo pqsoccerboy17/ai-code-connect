@@ -204,8 +204,8 @@ function getToolDisplayName(name: string): string {
 
 // AIC command definitions (single slash for AIC commands)
 const AIC_COMMANDS = [
-  { value: '/claude', name: `${rainbowText('/claude')}        Switch to Claude Code`, description: 'Switch to Claude Code' },
-  { value: '/gemini', name: `${rainbowText('/gemini', 1)}        Switch to Gemini CLI`, description: 'Switch to Gemini CLI' },
+  { value: '/claude', name: `${rainbowText('/claude')}        Switch to Claude Code`, description: 'Switch to Claude Code (add -i for interactive)' },
+  { value: '/gemini', name: `${rainbowText('/gemini', 1)}        Switch to Gemini CLI`, description: 'Switch to Gemini CLI (add -i for interactive)' },
   { value: '/i', name: `${rainbowText('/i', 2)}             Enter interactive mode`, description: 'Enter interactive mode (Ctrl+] or Ctrl+\\ to detach)' },
   { value: '/forward', name: `${rainbowText('/forward', 3)}       Forward last response`, description: 'Forward response: /forward [tool] [msg]' },
   { value: '/fwd', name: `${rainbowText('/fwd', 4)}            Forward (alias)`, description: 'Forward response: /fwd [tool] [msg]' },
@@ -509,8 +509,8 @@ export class SDKSession {
     
     // Commands in a wider layout (single slash = AIC commands, double slash = tool commands via interactive mode)
     const commandsLeft = [
-      `  ${rainbowText('/claude')}        Switch to Claude Code`,
-      `  ${rainbowText('/gemini', 1)}        Switch to Gemini CLI`,
+      `  ${rainbowText('/claude')}        Switch to Claude Code ${colors.dim}(-i for interactive)${colors.reset}`,
+      `  ${rainbowText('/gemini', 1)}        Switch to Gemini CLI ${colors.dim}(-i for interactive)${colors.reset}`,
       `  ${rainbowText('/i', 2)}             Enter interactive mode`,
       `  ${rainbowText('/forward', 3)}       Forward response ${colors.dim}[tool] [msg]${colors.reset}`,
       `  ${rainbowText('/forwardi', 4)}      Forward + interactive ${colors.dim}(or -i flag)${colors.reset}`,
@@ -560,7 +560,7 @@ export class SDKSession {
 
   private getPrompt(): string {
     const toolColor = this.activeTool === 'claude' ? colors.brightCyan : colors.brightMagenta;
-    const toolName = this.activeTool === 'claude' ? 'claude' : 'gemini';
+    const toolName = this.activeTool === 'claude' ? 'Claude Code' : 'Gemini CLI';
     return `${toolColor}❯ ${toolName}${colors.reset} ${colors.dim}→${colors.reset} `;
   }
 
@@ -709,15 +709,25 @@ export class SDKSession {
         process.exit(0);
         break;
 
-      case 'claude':
+      case 'claude': {
+        const hasInteractive = parts.slice(1).includes('-i');
         this.activeTool = 'claude';
         console.log(`${colors.green}●${colors.reset} Switched to ${colors.brightCyan}Claude Code${colors.reset}`);
+        if (hasInteractive) {
+          await this.enterInteractiveMode();
+        }
         break;
+      }
 
-      case 'gemini':
+      case 'gemini': {
+        const hasInteractive = parts.slice(1).includes('-i');
         this.activeTool = 'gemini';
         console.log(`${colors.green}●${colors.reset} Switched to ${colors.brightMagenta}Gemini CLI${colors.reset}`);
+        if (hasInteractive) {
+          await this.enterInteractiveMode();
+        }
         break;
+      }
 
       case 'forward':
       case 'fwd': {
@@ -790,8 +800,8 @@ export class SDKSession {
     console.log(`${colors.brightCyan}A${colors.brightMagenta}I${colors.reset} ${colors.brightYellow}C${colors.white}ode${colors.reset} ${colors.brightYellow}C${colors.white}onnect${colors.reset}² ${colors.dim}- Commands${colors.reset}`);
     console.log('');
     console.log(`${colors.white}Session Commands:${colors.reset}`);
-    console.log(`  ${rainbowText('/claude')}        Switch to Claude Code`);
-    console.log(`  ${rainbowText('/gemini')}        Switch to Gemini CLI`);
+    console.log(`  ${rainbowText('/claude')}        Switch to Claude Code ${colors.dim}(add -i for interactive)${colors.reset}`);
+    console.log(`  ${rainbowText('/gemini')}        Switch to Gemini CLI ${colors.dim}(add -i for interactive)${colors.reset}`);
     console.log(`  ${rainbowText('/i')}             Enter interactive mode ${colors.dim}(Ctrl+] or Ctrl+\\ to detach)${colors.reset}`);
     console.log(`  ${rainbowText('/forward')}       Forward last response ${colors.dim}[tool] [msg]${colors.reset}`);
     console.log(`  ${rainbowText('/forward -i')}    Forward and enter interactive mode`);
@@ -908,6 +918,10 @@ export class SDKSession {
     const toolName = adapter?.displayName || this.activeTool;
     const toolColor = adapter?.color || colors.white;
 
+    // Check if this is a first launch (no existing manager)
+    const existingManager = this.ptyManagers.get(this.activeTool);
+    const isFirstLaunch = !existingManager || existingManager.isDead();
+
     // Get or create the persistent PTY manager (don't wait for ready - user sees startup)
     const manager = await this.getOrCreateManager(this.activeTool, false);
     const isReattach = manager.isUserAttached() === false && manager.getState() !== PtyState.DEAD;
@@ -928,6 +942,8 @@ export class SDKSession {
       const buffer = manager.getOutputBuffer();
       const filteredBuffer = buffer.split(FOCUS_IN_SEQ).join('').split(FOCUS_OUT_SEQ).join('');
       process.stdout.write(filteredBuffer);
+    } else if (isFirstLaunch) {
+      console.log(`${colors.dim}💡 First launch of ${toolName} may take a few seconds to initialize...${colors.reset}`);
     }
     console.log(`${colors.dim}Press ${colors.brightYellow}Ctrl+]${colors.dim} or ${colors.brightYellow}Ctrl+\\${colors.dim} to detach${colors.reset}\n`);
 
