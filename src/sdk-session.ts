@@ -38,12 +38,16 @@ const DETACH_KEYS = {
   ESCAPE: 0x1b,            // Escape = 0x1B = 27
 };
 
+// Toggle key for quick switching between tools in interactive mode
+const TOGGLE_KEY = 0x1c;           // Ctrl+\ = 0x1C = 28
+const CSI_U_TOGGLE_SEQ = '\x1b[92;5u';  // Ctrl+\ in CSI u format (keycode 92 = '\')
+
 // CSI u sequences - modern keyboard protocol used by iTerm2
 // Format: ESC [ <keycode> ; <modifiers> u
 // Modifier 5 = Ctrl (4) + 1
 const CSI_U_DETACH_SEQS = [
   '\x1b[93;5u',   // Ctrl+] (keycode 93 = ])
-  '\x1b[92;5u',   // Ctrl+\ (keycode 92 = \)
+  // Note: Ctrl+\ ('\x1b[92;5u') is now used for toggle, not detach
   '\x1b[54;5u',   // Ctrl+^ / Ctrl+6 (keycode 54 = 6)
   '\x1b[45;5u',   // Ctrl+_ / Ctrl+- (keycode 45 = -)
   '\x1b[54;6u',   // Ctrl+Shift+6 (modifier 6 = Ctrl+Shift)
@@ -208,7 +212,7 @@ function getToolDisplayName(name: string): string {
 const AIC_COMMANDS = [
   { value: '/claude', name: `${rainbowText('/claude')}        Switch to Claude Code`, description: 'Switch to Claude Code (add -i for interactive)' },
   { value: '/gemini', name: `${rainbowText('/gemini', 1)}        Switch to Gemini CLI`, description: 'Switch to Gemini CLI (add -i for interactive)' },
-  { value: '/i', name: `${rainbowText('/i', 2)}             Enter interactive mode`, description: 'Enter interactive mode (Ctrl+] or Ctrl+\\ to detach)' },
+  { value: '/i', name: `${rainbowText('/i', 2)}             Enter interactive mode`, description: 'Enter interactive mode (Ctrl+] to detach, Ctrl+\\\\ to toggle)' },
   { value: '/forward', name: `${rainbowText('/forward', 3)}       Forward last response`, description: 'Forward response: /forward [tool] [msg]' },
   { value: '/fwd', name: `${rainbowText('/fwd', 4)}            Forward (alias)`, description: 'Forward response: /fwd [tool] [msg]' },
   { value: '/history', name: `${rainbowText('/history', 4)}       Show conversation`, description: 'Show conversation history' },
@@ -582,7 +586,7 @@ export class SDKSession {
     console.log('');
     
     // Tips section
-    console.log(`  ${colors.dim}💡 ${colors.brightYellow}//command${colors.dim} opens interactive mode & sends the command. ${colors.white}Use ${colors.brightYellow}Ctrl+]${colors.white}, ${colors.brightYellow}Ctrl+\\${colors.white}, or ${colors.brightYellow}Esc Esc${colors.white} to return to aic²${colors.reset}`);
+    console.log(`  ${colors.dim}💡 ${colors.brightYellow}//command${colors.dim} opens interactive mode & sends the command. ${colors.white}Use ${colors.brightYellow}Ctrl+]${colors.white} to return, ${colors.brightYellow}Ctrl+\\${colors.white} to toggle tools${colors.reset}`);
     console.log(`  ${colors.dim}💡 ${colors.brightYellow}Tab${colors.dim}: autocomplete   ${colors.brightYellow}↑/↓${colors.dim}: history${colors.reset}`);
     console.log('');
     
@@ -842,7 +846,7 @@ export class SDKSession {
     console.log(`${colors.white}Session Commands:${colors.reset}`);
     console.log(`  ${rainbowText('/claude')}        Switch to Claude Code ${colors.dim}(add -i for interactive)${colors.reset}`);
     console.log(`  ${rainbowText('/gemini')}        Switch to Gemini CLI ${colors.dim}(add -i for interactive)${colors.reset}`);
-    console.log(`  ${rainbowText('/i')}             Enter interactive mode ${colors.dim}(Ctrl+] or Ctrl+\\ to detach)${colors.reset}`);
+    console.log(`  ${rainbowText('/i')}             Enter interactive mode ${colors.dim}(Ctrl+] to detach, Ctrl+\\ to toggle)${colors.reset}`);
     console.log(`  ${rainbowText('/forward')}       Forward last response ${colors.dim}[tool] [msg]${colors.reset}`);
     console.log(`  ${rainbowText('/forward -i')}    Forward and enter interactive mode`);
     console.log(`  ${rainbowText('/forwardi')}      Same as /forward -i ${colors.dim}(alias: /fwdi)${colors.reset}`);
@@ -855,12 +859,13 @@ export class SDKSession {
     console.log('');
     console.log(`${colors.white}Tool Commands:${colors.reset}`);
     console.log(`  ${colors.brightYellow}//command${colors.reset}        Send /command to the active tool`);
-    console.log(`  ${colors.dim}                 Opens interactive mode, sends command, Ctrl+] or Ctrl+\\ to return${colors.reset}`);
+    console.log(`  ${colors.dim}                 Opens interactive mode, sends command, Ctrl+] to return, Ctrl+\\ to toggle${colors.reset}`);
     console.log('');
     console.log(`${colors.white}Tips:${colors.reset}`);
     console.log(`  ${colors.dim}•${colors.reset} ${colors.brightYellow}Tab${colors.reset}            Autocomplete commands`);
     console.log(`  ${colors.dim}•${colors.reset} ${colors.brightYellow}↑/↓${colors.reset}            Navigate history`);
-    console.log(`  ${colors.dim}•${colors.reset} ${colors.brightYellow}Ctrl+]${colors.reset}, ${colors.brightYellow}Ctrl+\\${colors.reset}, ${colors.brightYellow}Ctrl+^${colors.reset}, or ${colors.brightYellow}Ctrl+_${colors.reset}  Detach from interactive mode`);
+    console.log(`  ${colors.dim}•${colors.reset} ${colors.brightYellow}Ctrl+]${colors.reset}, ${colors.brightYellow}Ctrl+^${colors.reset}, or ${colors.brightYellow}Ctrl+_${colors.reset}  Detach from interactive mode`);
+    console.log(`  ${colors.dim}•${colors.reset} ${colors.brightYellow}Ctrl+\\${colors.reset}  Quick toggle between tools in interactive mode`);
     console.log(`  ${colors.dim}•${colors.reset} ${colors.brightYellow}Esc Esc${colors.reset}        Detach (press Escape twice quickly)`);
     console.log('');
   }
@@ -1059,7 +1064,7 @@ export class SDKSession {
     } else if (isFirstLaunch) {
       console.log(`${colors.dim}💡 First launch of ${toolName} may take a few seconds to initialize...${colors.reset}`);
     }
-    console.log(`${colors.dim}Press ${colors.brightYellow}Ctrl+]${colors.dim} or ${colors.brightYellow}Ctrl+\\${colors.dim} to detach${colors.reset}\n`);
+    console.log(`${colors.dim}Press ${colors.brightYellow}Ctrl+]${colors.dim} to detach, ${colors.brightYellow}Ctrl+\\${colors.dim} to toggle tools${colors.reset}\n`);
 
     // Mark as attached - output will now flow to stdout
     manager.attach();
@@ -1087,7 +1092,7 @@ export class SDKSession {
     this.rl?.close();
     this.rl = null;
 
-    console.log(`${colors.dim}Sending ${colors.brightYellow}${slashCommand}${colors.dim}... Press ${colors.brightYellow}Ctrl+]${colors.dim} or ${colors.brightYellow}Ctrl+\\${colors.dim} to return${colors.reset}\n`);
+    console.log(`${colors.dim}Sending ${colors.brightYellow}${slashCommand}${colors.dim}... Press ${colors.brightYellow}Ctrl+]${colors.dim} to return, ${colors.brightYellow}Ctrl+\\${colors.dim} to toggle tools${colors.reset}\n`);
 
     // Mark as attached
     manager.attach();
@@ -1116,14 +1121,19 @@ export class SDKSession {
    * Common interactive session logic - handles stdin forwarding and detach keys
    */
   private runInteractiveSession(
-    manager: PersistentPtyManager,
+    initialManager: PersistentPtyManager,
     toolName: string,
     toolColor: string
   ): Promise<void> {
-    const pty = manager.getPty();
+    const pty = initialManager.getPty();
     if (!pty) {
       return Promise.reject(new Error('PTY not available'));
     }
+
+    // Use let so we can reassign during toggle
+    let manager = initialManager;
+    let currentToolName = toolName;
+    let currentToolColor = toolColor;
 
     return new Promise((resolve) => {
       // Handle resize
@@ -1142,6 +1152,7 @@ export class SDKSession {
       process.stdin.resume();
 
       let detached = false;
+      let isToggling = false;  // Guard to prevent re-entry during async toggle
       let lastEscapeTime = 0;
       const debugKeys = process.env.AIC_DEBUG === '1';
 
@@ -1183,9 +1194,114 @@ export class SDKSession {
         }
 
         process.stdout.write('\x1b[2K\r');
-        console.log(`\n\n${colors.yellow}⏸${colors.reset} Detached from ${toolColor}${toolName}${colors.reset} ${colors.dim}(still running)${colors.reset}`);
+        console.log(`\n\n${colors.yellow}⏸${colors.reset} Detached from ${currentToolColor}${currentToolName}${colors.reset} ${colors.dim}(still running)${colors.reset}`);
         console.log(`${colors.dim}Use ${colors.brightYellow}/i${colors.dim} to re-attach${colors.reset}\n`);
         resolve();
+      };
+
+      // Toggle between tools without detaching (Ctrl+\)
+      const performToggle = async () => {
+        // Prevent re-entry during async operations
+        if (isToggling) return;
+        isToggling = true;
+
+        // Immediately remove stdin listener to prevent issues
+        if (onStdinData) {
+          process.stdin.removeListener('data', onStdinData);
+        }
+
+        // Determine target tool BEFORE async operations (for immediate feedback)
+        const currentTool = this.activeTool;
+        const otherTools = AVAILABLE_TOOLS
+          .map(t => t.name)
+          .filter(t => t !== currentTool);
+
+        if (otherTools.length === 0) {
+          console.log(`\n${colors.yellow}No other tool to toggle to.${colors.reset}`);
+          manager.attach();
+          if (onStdinData) {
+            process.stdin.on('data', onStdinData);
+          }
+          isToggling = false;
+          return;
+        }
+
+        const targetTool = otherTools[0] as 'claude' | 'gemini';
+        const targetAdapter = this.registry.get(targetTool);
+        const sourceColor = getToolColor(currentTool);
+        const targetColor = getToolColor(targetTool);
+        const sourceName = getToolDisplayName(currentTool);
+        const targetName = targetAdapter?.displayName || targetTool;
+
+        // Show immediate visual feedback BEFORE async operations
+        process.stdout.write('\x1b[2K\r'); // Clear current line
+        console.log('');
+        console.log(`${colors.dim}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);
+        console.log(`${colors.green}⇆${colors.reset} Quick toggle: ${sourceColor}${sourceName}${colors.reset} → ${targetColor}${targetName}${colors.reset}`);
+        console.log(`${colors.dim}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);
+
+        try {
+          // Save current buffer to conversation history
+          const outputBuffer = manager.getOutputBuffer();
+          if (outputBuffer && outputBuffer.length > 0) {
+            const adapter = this.registry.get(currentTool);
+            if (adapter) {
+              const cleanedResponse = adapter.cleanResponse(outputBuffer);
+              if (cleanedResponse && cleanedResponse.length > 20) {
+                this.conversationHistory.push({
+                  tool: currentTool,
+                  role: 'assistant',
+                  content: cleanedResponse,
+                });
+                while (this.conversationHistory.length > MAX_HISTORY_SIZE) {
+                  this.conversationHistory.shift();
+                }
+              }
+            }
+          }
+
+          // Detach from current tool
+          manager.detach();
+
+          // Update active tool
+          this.activeTool = targetTool;
+
+          // Get target tool's PTY manager (may spawn if needed - this is the async part)
+          const targetManager = await this.getOrCreateManager(targetTool, false);
+
+          // Update mutable references
+          manager = targetManager;
+          currentToolName = targetAdapter?.displayName || targetTool;
+          currentToolColor = targetAdapter?.color || colors.white;
+
+          // Replay target's buffer to restore previous session state
+          const targetBuffer = targetManager.getOutputBuffer();
+          if (targetBuffer && targetBuffer.length > 0) {
+            process.stdout.write('\x1b[2J\x1b[H'); // Clear screen, cursor to top
+            console.log(`${colors.green}⇆${colors.reset} ${targetColor}${targetName}${colors.reset}`);
+            console.log('');
+            const filteredBuffer = targetBuffer
+              .split(FOCUS_IN_SEQ).join('')
+              .split(FOCUS_OUT_SEQ).join('');
+            process.stdout.write(filteredBuffer);
+          }
+
+          // Attach to target tool and re-register stdin listener
+          targetManager.attach();
+          if (onStdinData) {
+            process.stdin.on('data', onStdinData);
+          }
+        } catch (error) {
+          // Recovery: try to re-attach to original tool
+          console.error(`\n${colors.red}Toggle failed: ${error}${colors.reset}`);
+          this.activeTool = currentTool;
+          manager.attach();
+          if (onStdinData) {
+            process.stdin.on('data', onStdinData);
+          }
+        } finally {
+          isToggling = false;
+        }
       };
 
       onStdinData = (data: Buffer) => {
@@ -1220,14 +1336,25 @@ export class SDKSession {
           }
         }
 
-        // Check for detach keys
+        // Check for detach keys (note: Ctrl+\ is now used for toggle, not detach)
         for (let i = 0; i < data.length; i++) {
           const byte = data[i];
           if (byte === DETACH_KEYS.CTRL_BRACKET ||
-              byte === DETACH_KEYS.CTRL_BACKSLASH ||
               byte === DETACH_KEYS.CTRL_CARET ||
               byte === DETACH_KEYS.CTRL_UNDERSCORE) {
             performDetach();
+            return;
+          }
+        }
+
+        // Check for toggle key (Ctrl+\) or CSI u toggle sequence
+        if (str === CSI_U_TOGGLE_SEQ || str.includes(CSI_U_TOGGLE_SEQ)) {
+          performToggle();
+          return;
+        }
+        for (let i = 0; i < data.length; i++) {
+          if (data[i] === TOGGLE_KEY) {
+            performToggle();
             return;
           }
         }
