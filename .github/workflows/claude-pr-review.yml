@@ -1,0 +1,40 @@
+name: Claude PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Review PR with Claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          direct_prompt: |
+            Review this pull request for:
+            1. Code quality - Clean, readable, maintainable TypeScript with ESModule conventions
+            2. Adapter pattern compliance - New tools must implement ToolAdapter interface, registered in adapters/index.ts and index.ts
+            3. Security - Validate command names with regex, use spawn() with arrays (never exec() with string interpolation), config files should use mode 0o600
+            4. Import conventions - Relative imports with .js extension required
+            5. Potential bugs - Logic errors, edge cases, null checks, async/await correctness
+            6. Project conventions - Check CLAUDE.md for project-specific conventions
+
+            Be concise and actionable. Focus on issues that matter, not style nitpicks.
+            If the PR looks good, say so briefly.
+          claude_args: >-
+            --max-turns 10
+            --allowedTools "Read,Glob,Grep,LS"
